@@ -1,0 +1,214 @@
+#lang racket
+(require rackunit
+         rackunit/text-ui 
+         rackunit/gui)
+
+
+(require "NMBS.rkt")
+(require "Infrabel.rkt")
+(require "Crossings.rkt")
+(require "interface.rkt")
+(require "Switches.rkt")
+(require "graph.rkt")
+
+(setup-hardware)
+
+(define (setup-test-environment)
+  (void))
+
+(define (cleanup-test-environment)
+ (stop))
+
+(define run-all-tests
+   (test-suite "All Tests"
+               (test-train-on-track)
+               (test-change-speed!)
+               (test-start-train!)
+               (test-stop-train!)
+               (test-change-direction!)
+               (test-get-position-train)
+               (test-store-crossing!)
+               (test-close-current-crossing!)
+               (test-open-current-crossing!)
+               (test-chose-light-color-tests)
+               (switches-tests)
+               (graph-tests)
+              
+               (test-adjust-speed)
+               (test-update-train-speed-based-on-block-length)
+          
+               ))
+
+(define (test-train-on-track)
+  (test-case "Testing train-on-track function"
+    (setup-test-environment)
+
+    (train-on-track "Train1" "S-26" "1-4")
+
+    ;; Test when the train already exists
+    (check-equal? (hash-ref trains "Train1") '("Train1" "S-26" "1-4"))
+
+    (cleanup-test-environment)))
+
+(define (test-change-speed!)
+  (test-case "Testing change-speed! function"
+    (setup-test-environment)
+
+    (train-on-track "Train1" "S-16" "1-4")
+
+    ;; Test changing speed
+    (change-speed! "Train1" 100)
+    (check-equal? (message-to-infrabel-train 'get-loco-speed 'Train1) 100)
+
+    (cleanup-test-environment)))
+
+(define (test-start-train!)
+  (test-case "Testing start-train! function"
+    (setup-test-environment)
+
+    (train-on-track "Train2" "S-26" "1-4")
+
+    ;; Test starting a train
+    (start-train! "Train1")
+    (check-equal? (message-to-infrabel-train 'get-loco-speed 'Train1) initial-speed)
+
+    (cleanup-test-environment)))
+
+(define (test-stop-train!)
+  (test-case "Testing stop-train! function"
+    (setup-test-environment)
+
+    (train-on-track "Train4" "S-26" "1-4")
+
+    ;; Test stopping a train
+    (stop-train! "Train4")
+    (check-equal? (message-to-infrabel-train 'get-loco-speed 'Train4) 0)
+
+    (cleanup-test-environment)))
+
+
+(define (test-change-direction!)
+  (test-case "Testing change-direction! function"
+    (setup-test-environment)
+
+    (train-on-track "Train7" "S-26" "1-4")
+
+    ;; Test changing direction
+    (change-direction! "Train7")
+    (check-equal? (message-to-infrabel-train 'get-loco-speed 'Train7) (reverse-number initial-speed))
+
+    (cleanup-test-environment)))
+
+(define (test-get-position-train)
+  (test-case "Testing get-position-train function"
+    (setup-test-environment)
+
+    (train-on-track "Train8" "S-26" "1-4")
+
+    ;; Test getting the position of the train
+    (list? (get-position-train))
+    (cleanup-test-environment)))
+
+(define (test-store-crossing!)
+  (test-case "Testing store-crossing! function"
+    (setup-test-environment)
+
+    ;; Test storing a crossing
+    (store-crossing! "C-2")
+    (check-equal? selected-crossing "C-2")
+
+    (cleanup-test-environment)))
+
+(define (test-close-current-crossing!)
+  (test-case "Testing close-current-crossing! function"
+    (setup-test-environment)
+
+    ;; Test closing a crossing
+    (close-current-crossing! initial-crossing)
+    (check-equal? crossing-open-test #f)
+
+    (cleanup-test-environment)))
+
+(define (test-open-current-crossing!)
+  (test-case "Testing open-current-crossing! function"
+    (setup-test-environment)
+
+    ;; Test opening a crossing
+    (open-current-crossing! initial-crossing)
+     (check-equal? crossing-open-test #t)
+
+    (cleanup-test-environment)))
+
+(define (test-chose-light-color-tests)
+  (test-case
+   "Test chose-light-color function"
+   (setup-test-environment)
+    ;; Test choosing light color
+   (let* ([light-id "L1"]
+          [code "GREEN"])
+     (chose-light-color light-id code)
+     (check-equal? signal code))
+   (cleanup-test-environment)))
+
+(define (switches-tests)
+  (test-case
+   "Test get-current-switch-position and set-current-switch-position! function"
+   (let* ([switch-id 'S-1]
+          [initial-position 1]
+          [new-position 2])
+     
+     (setup-test-environment)
+     
+     ;; Test get-current-switch-position before setting
+     (check-equal? (get-current-switch-position switch-id) initial-position)
+
+     ;; Test set-current-switch-position!
+     (set-current-switch-position! switch-id new-position)
+
+     ;; Test get-current-switch-position after
+     (check-equal? (get-current-switch-position switch-id) new-position)
+     (cleanup-test-environment))))
+
+(define (graph-tests)
+  ; Test label->index and index->label functions
+  (test-case "Test label->index and index->label functions"
+    (check-equal? (label->index 'S-7) 8)
+    (check-equal? (index->label 0) "1-6"))
+
+  ; Test next-label function
+  (test-case "Test next-label function"
+    (check-equal? (next-label 'S-5 #t) "1-6")
+    (check-equal? (next-label 'S-5 #f) "2-3")))
+
+(define (test-adjust-speed)
+  (test-case "Testing adjust-speed function"
+    (setup-test-environment)
+    
+    ;; Test different block lengths
+    (check-equal? (adjust-speed "1-6") 100)
+    (check-equal? (adjust-speed "2-3") 70)
+    (check-equal? (adjust-speed "1-1") 70)
+    (check-equal? (adjust-speed "1-3") 150)
+    (check-equal? (adjust-speed "non-existent") 80) ; Default speed
+
+    (cleanup-test-environment)))
+
+(define (test-update-train-speed-based-on-block-length)
+  (test-case "Testing update-train-speed-based-on-block-length function"
+    (setup-test-environment)
+    
+    ;; Add a train and test speed adjustment based on block length
+    (add-train "Train1" "1-1" "1-6")
+    (update-train-speed-based-on-block-length "Train1")
+    (check-equal? (message-to-infrabel-train 'get-loco-speed 'Train1) 100)
+    
+    (set-train-position "Train1" "2-3")
+    (update-train-speed-based-on-block-length "Train1")
+    (check-equal? (message-to-infrabel-train 'get-loco-speed 'Train1) 70)
+
+    (cleanup-test-environment)))
+
+
+
+; Run all tests
+(test/gui run-all-tests)

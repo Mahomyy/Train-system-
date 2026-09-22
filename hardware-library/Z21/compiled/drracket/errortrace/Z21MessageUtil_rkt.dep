@@ -1,0 +1,1 @@
+("8.11" tarm64osx ("0bb32d39d335511371af9a7cc28d757c6e29f151" . "373398886cdc40e349ae68dab0e3289dc3e040dd") #"/Users/gurkanhamarat/Desktop/PP2/hardware-library/Z21/./racket-bits-utils-master/bits.rkt" (collects #"drracket" #"private" #"drracket-errortrace-key.rkt") (collects #"racket" #"main.rkt") (collects #"racket" #"runtime-config.rkt"))
