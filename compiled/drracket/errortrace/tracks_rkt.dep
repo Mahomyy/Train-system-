@@ -1,0 +1,1 @@
+("8.11" tarm64osx ("f497d781b5244e34cd6cc82d9416a55e5906add7" . "88bf349c59a6f711f2a31413658f6f83c884a655") (collects #"drracket" #"private" #"drracket-errortrace-key.rkt") (collects #"racket" #"class.rkt") (collects #"racket" #"main.rkt") (collects #"racket" #"runtime-config.rkt"))

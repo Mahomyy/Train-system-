@@ -1,0 +1,380 @@
+#lang racket
+
+(require "interface.rkt") 
+(require "train.rkt")
+(require "graph.rkt")
+
+
+
+(provide message-to-infrabel-train
+         message-to-infrabel-crossing
+         message-to-infrabel-lights
+         message-to-infrabel-switches
+         message-to-infrabel-detectionb
+         message-to-infrabel-traject
+         add-train
+         reserve-block
+         get-blocks-trains
+         find-new-occupied-block
+         previous-occupied-blocks
+         apply-function-to-arguments
+         adjust-speed
+         update-train-speed-based-on-block-length
+         set-train-position
+         monitor-occupied-blocks
+         unreserve-block
+         monitor-old-blocks
+         traject-loop
+         get-train-position)
+
+(define (apply-function-to-arguments func args)
+  (if (list? args) (apply func args) (func args)))
+
+(define dest '())
+(define train-traject '())
+(define boolean-traject #f)
+
+;;For Train
+
+(define (message-to-infrabel-train message args-list)
+  (cond ((equal? message 'add-loco)
+         (apply-function-to-arguments add-loco args-list))
+        ((equal? message 'set-loco-speed!)
+         (apply-function-to-arguments set-loco-speed! args-list))
+         ((equal? message 'get-loco-speed)
+         (apply-function-to-arguments get-loco-speed  args-list))))
+
+
+(define (message-to-infrabel-traject message args-list)
+  (cond ((equal? message 'start-traject)
+         (apply-function-to-arguments start-traject args-list))))
+        
+        
+
+;;for crossing
+
+(define (message-to-infrabel-crossing message arg)
+  (cond ((equal? message 'close-crossing!)
+         (apply-function-to-arguments close-crossing!  arg))
+        ((equal? message 'open-crossing!)
+         (apply-function-to-arguments open-crossing!  arg))))
+
+
+;;for lights
+
+(define (message-to-infrabel-lights message arg)
+  (cond ((equal? message 'set-sign-code!)
+         (apply-function-to-arguments set-sign-code! arg))))
+
+;;for switches
+
+(define (message-to-infrabel-switches message arg)
+  (cond ((equal? message 'get-switch-position)
+          (apply-function-to-arguments get-switch-position arg))
+        ((equal? message 'set-switch-position!)
+         (apply-function-to-arguments set-switch-position! arg))
+        ((equal? message 'get-switch-ids)
+         (get-switch-ids))))
+
+
+;extra uitbreiding
+;; Define the block lengths
+(define blocks-length
+  '(("1-6" . 2)
+    ("2-3" . 1)
+    ("1-1" . 1)
+    ("1-8" . 0)
+    ("2-1" . 0)
+    ("2-2" . 0)
+    ("2-5" . 0)
+    ("2-6" . 0)
+    ("2-7" . 0)
+    ("2-8" . 0)
+    ("1-2" . 2)
+    ("1-4" . 0)
+    ("1-5" . 3)
+    ("2-4" . 2)
+    ("1-3" . 3)
+    ("1-7" . 2)))
+
+(define (adjust-speed block-id)
+  (let ((block (assoc block-id blocks-length)))
+    (if block
+        (let ((length (cdr block)))
+          (cond ((= length 0) 50)
+                ((= length 1) 70)
+                ((= length 2) 100)
+                ((= length 3) 150)
+                (else 80))) ;; Default speed if block length is not matched
+        80))) ;; Default speed if block is not found
+
+;; New function to update train speed based on the current block
+(define (update-train-speed-based-on-block-length train-id)
+  (let ((current-block (get-train-position train-id)))
+      (let ((speed (adjust-speed current-block)))
+        (when train-id
+     (message-to-infrabel-train 'set-loco-speed! (list (string->symbol train-id) speed))))))
+
+
+;;for detectionblock
+
+
+(define reserved-detection-blocks (make-hash)) ; Hash table to store reserved detection blocks
+
+(define (reserve-block train-id block-id)
+  (hash-set! reserved-detection-blocks block-id train-id)) 
+
+(define (get-blocks-trains)
+  ; Get all occupied detection blocks along with the train IDs
+  (hash-map reserved-detection-blocks
+            (lambda (block-id train-id)
+              (cons (symbol->string block-id) train-id))))
+
+
+
+(define (get-train-reserving-block block-id)
+  ; Get the train that has reserved a specific detection block
+  (hash-ref reserved-detection-blocks block-id #f))
+
+(define (reserved? block)
+  (if (string? block)
+  ; Check if the block is in the reserved detection blocks hash table
+  (hash-has-key? reserved-detection-blocks (string->symbol block))
+   (hash-has-key? reserved-detection-blocks  block)))
+  ;;block is a string
+
+
+(define (unreserve-block train-id block-id)
+  ; Remove the reservation of a detection block for a specific train
+  (when (reserved? block-id)
+    (let ((reserved-train-id (get-train-reserving-block block-id)))
+      (when (and (equal? reserved-train-id train-id) (not (false? train-id)))
+        ; Unreserve the block only if it's reserved by the specified train
+        (hash-remove! reserved-detection-blocks block-id)
+        (displayln (format "Block ~a released from train ~a" block-id train-id))
+        "Detection block released successfully."))))
+
+
+
+
+(define (get-current-position-from-graph train-id)
+  (define trains-list
+    (for/list ([train-id (hash-keys trains)])
+      (hash-ref trains train-id)))
+  (let ((label (find-train train-id trains-list)))
+    (if label
+       (label->index label)
+        #f)))  ; Return #f if train not found
+
+(define (get-destination-from-graph train-id graph)
+   ;Retrieve the destination of the train from the graph based on the train's ID
+  (let ((label 0 ))  
+   (label->index label)))
+
+(define trains (make-hash)) ; Hash table to store train positions
+
+(define (add-train train-id previous-track current-track)
+  ; Add a new train with its current track and previous track
+  (hash-set! trains train-id (list current-track previous-track)))
+
+(define (get-train-previous-position train-id)
+  ; Retrieve the current track of the specified train
+  (cadr (hash-ref trains train-id)))
+
+(define (hash-table-empty? ht)
+  (zero? (hash-count ht)))
+
+(define (get-train-position train-id)
+ (if (not (hash-table-empty? trains))
+      (let ((position (hash-ref trains train-id #f)))
+        (if position
+            (car position)  ; Return the position if found
+            #f))           ; Return #f if train-id doesn't exist
+      #f))               ; Return #f if the hash table is empty
+
+
+(define (set-train-position train-id current-track)
+  (hash-set! trains train-id (list current-track (get-train-position train-id))))
+
+
+(define (set-difference lst1 lst2)
+  ; Return the elements of lst1 that are not in lst2
+  (filter (lambda (x) (not (member x lst2))) lst1))
+
+(define (find-new-occupied-block prev-occupied-blocks current-occupied-blocks)
+  ; Find the new occupied block by comparing with the previous list
+  (let ((new-occupied-blocks (set-difference current-occupied-blocks prev-occupied-blocks)))
+    (cond
+      ((null? new-occupied-blocks) #f) ; If no new occupied blocks, return #f
+      ((= (length new-occupied-blocks) 1)  (car new-occupied-blocks)) ; If only one new block, return it
+      (else (error "Multiple new occupied blocks detected"))))) ; Error if multiple new blocks detected
+
+
+(define (find-old-occupied-block prev-occupied-blocks current-occupied-blocks)
+  ; Find the old occupied block(s) that are not present in the current list
+  (let ((old-occupied-blocks (set-difference prev-occupied-blocks current-occupied-blocks)))
+    (cond
+      ((null? old-occupied-blocks) #f) ; If no old occupied blocks, return #f
+      ((= (length old-occupied-blocks) 1) (car old-occupied-blocks)) ; If only one old block, return it
+      (else (error "Multiple old occupied blocks detected"))))) ; Error if multiple old blocks detected
+
+
+
+
+
+(define (train-for-block! new-occupied-block)
+  ; Iterate over each train and update its position if its next track matches the new occupied block
+  (hash-for-each
+    trains
+   (lambda (train-id train-info)
+     (let* ((current-track (car train-info))
+            (next-track (next-label current-track (direction-train train-id))))
+       ;; Check if the next track matches the new occupied block for this train
+       (when (and next-track (equal? next-track (symbol->string new-occupied-block)))
+         ;; Update the current track of the found train
+         (set-train-position train-id (symbol->string new-occupied-block))
+         )))))
+
+
+
+
+
+(define (find-train-id-for-block block-id)
+  ; Iterate over all trains and find the train ID whose current track matches the block ID
+  (let ((matching-train-id #f))
+    (hash-for-each
+      trains
+     (lambda (train-id train-info)
+       (let ((current-track (car train-info)))
+         (when (equal? current-track block-id)
+           ;; If the current track matches the block ID, set matching-train-id and exit loop
+           (set! matching-train-id train-id)
+           )))
+    )
+    matching-train-id))
+
+
+
+
+(define (next-block-reserved!)
+  (let ((occupied-blocks (get-blocks-trains)))
+    (for-each
+     (lambda (block-train-pair)
+       (let* ((block-id (car block-train-pair))
+              (train-id (find-train-id-for-block block-id))
+              (current-label block-id)
+              (next (next-label current-label (direction-train train-id))))
+         (when train-id
+           (if (and (not (equal? next dest)) ; Check if next block is not the destination
+                    (reserved? next))
+               (message-to-infrabel-train 'set-loco-speed! (list (string->symbol train-id) 0))
+               (unless (equal? block-id dest) ; If not destination, adjust speed
+                 (message-to-infrabel-train 'set-loco-speed! (list (string->symbol train-id) 100)))))))
+     occupied-blocks)))
+
+
+
+(define previous-occupied-blocks '()) ; Variable to store the previous list of occupied blocks
+
+(define (monitor-occupied-blocks)
+  (let ((current-occupied-blocks (get-occupied-detection-blocks)))
+    (let ((new-block-occ (find-new-occupied-block previous-occupied-blocks current-occupied-blocks))
+          )
+      (when new-block-occ
+        (begin
+          ;; Update the previous list of occupied blocks
+          (set! previous-occupied-blocks current-occupied-blocks)
+          ;; Reserve the new occupied block if not already reserved
+          (unless (get-train-reserving-block new-block-occ)
+            (reserve-block (find-train-id-for-block new-block-occ) new-block-occ)))))))
+       
+
+
+
+
+(define (monitor-old-blocks)
+  (let ((current-occupied-blocks (get-occupied-detection-blocks)))
+    (let ((block-to-remove (find-old-occupied-block previous-occupied-blocks current-occupied-blocks)))
+      (when block-to-remove
+          ;; Unreserve the block
+          (let ((train-id (find-train-id-for-block block-to-remove)))
+            (unreserve-block train-id (before-label block-to-remove (direction-train train-id))))))))
+
+
+
+
+
+(define monitor-interval 2)
+
+
+(define (message-to-infrabel-detectionb message . args)
+  (cond ((equal? message 'get-occupied-detection-blocks)
+         (get-occupied-detection-blocks))
+        ((equal? message 'reserve-block)
+         (let ((train-id (car args)) (block-id (cadr args)))
+           (reserve-block train-id block-id)
+           "Detection block reserved successfully."))
+         ((equal? message 'release-block)
+          (let ((train-id (car args)) (block-id (cadr args)))
+           (reserve-block train-id block-id)))))
+        
+
+;;automatic traject
+
+(define (start-traject train-id destination)
+
+  
+  ;; Function to move the train along the path
+  (define (move-train-to-destination train-id destination)
+      (let ((current-block (get-train-position train-id)))
+        (if (not (equal? current-block destination))
+            (begin
+             (set! dest destination)
+             (set! train-traject train-id)
+             (set! boolean-traject #t)
+             (update-train-speed-based-on-block-length train-id))
+            (begin
+              (set! boolean-traject #f)
+              ;; Stop the train
+              (message-to-infrabel-train 'set-loco-speed! (list (string->symbol train-id) 0))
+              (displayln (format "Train ~a has reached the destination ~a" train-id destination))
+             ))))
+             
+              
+
+  ;; Start moving the train towards the destination
+  (move-train-to-destination train-id destination))
+
+
+  (define (traject-loop)
+    (when boolean-traject
+        (start-traject train-traject dest)))
+        
+        
+    
+
+
+(define (monitor-loop)
+  (let loop ()
+    (let* ((current-occupied-blocks (get-occupied-detection-blocks))
+           (new-block-occ (find-new-occupied-block previous-occupied-blocks current-occupied-blocks)))
+      (monitor-old-blocks)
+      (monitor-occupied-blocks)
+      (next-block-reserved!)
+      (when new-block-occ (train-for-block! new-block-occ))
+      (set! previous-occupied-blocks current-occupied-blocks) ; Update previous blocks
+      (traject-loop)
+      (sleep monitor-interval)
+      (loop))))
+
+
+;; a thread for the monitoring loop otherwise gui not working because you have a loop
+(define monitor-thread
+  (thread (lambda () (monitor-loop))))
+
+
+
+
+ 
+        
+

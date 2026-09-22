@@ -1,0 +1,12 @@
+#lang racket
+
+(require "GUI.rkt")
+
+(require "interface.rkt")
+
+
+(setup-hardware)
+(start)
+
+(make-gui)
+

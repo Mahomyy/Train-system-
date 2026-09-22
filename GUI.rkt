@@ -1,0 +1,293 @@
+#lang racket
+
+(require racket/gui/base)
+(require "NMBS.rkt")
+(require "graph.rkt")
+
+(provide make-gui)
+ 
+
+(define frame (new frame% [label "OPERATE"] [width 300] [height 150]))
+(define frame-state (new frame% [label "STATE"] [width 300] [height 150]))
+
+
+(define (make-gui)
+
+
+
+(define group-box-panel (new group-box-panel%
+                             (parent frame)
+                             (label "TRAINS")))
+
+(define train-id-field (new text-field% [parent group-box-panel] [label "Train ID"]))
+(define loco-pos1-field (new text-field% [parent group-box-panel] [label "Previous segment ID"]))
+(define loco-pos2-field (new text-field% [parent group-box-panel] [label "Current segment ID"]))
+
+
+
+ 
+
+(define (create-button label fields callback group-box-panel)
+  (new button%
+       [parent group-box-panel]
+       [label label]
+       [callback (lambda (button event)
+                   (let ([values (for/list ([field fields])
+                                    (send field get-value))])
+                     (apply callback values)))]))
+
+
+
+(define (create-slider label fields callback speed)
+  (new slider%
+       [parent group-box-panel]
+       [label label]
+       [min-value 0]  
+       [max-value (* speed 2)]
+       (init-value speed)
+       [callback (lambda (slider event)
+                   (let ([values (for/list ([field fields])
+                                    (send field get-value))])
+                     (apply callback values)))]))
+  
+
+
+(define button
+  (create-button "ADD TRAIN" (list train-id-field loco-pos1-field loco-pos2-field)
+                 (lambda (train-id loco-pos1 loco-pos2)
+                   (train-on-track train-id loco-pos1 loco-pos2)
+                   (start-train! train-id)  
+                   (update-status-bar status-bar status-bar2 status-bar3 status-bar4 status-bar-pos train-id-field (send radio-box2 get-selection) selected-light-id selected-switch-id))
+                 group-box-panel))
+
+
+
+(define train-id-field2 (new text-field% [parent group-box-panel] [label "Choose train by ID"]))
+
+
+
+(define slider
+  (create-slider "Change speed" (list train-id-field2)
+                 (lambda (train-id)
+                   (let ([selected-train (get-selected-train train-id-field2)]
+                         [speed (send slider get-value)]) 
+                     (when selected-train
+                       (if (direction-train train-id)
+                           (change-speed! train-id speed)             
+                           (change-speed! train-id (reverse-number speed))))
+                  (update-status-bar status-bar status-bar2 status-bar3 status-bar4 status-bar-pos train-id-field2 (send radio-box2 get-selection) selected-light-id selected-switch-id)))
+                 initial-speed))   
+
+
+(define (create-radio-box parent label choices callback-function)
+  (new radio-box%
+       [parent parent]
+       [label label]
+       [choices choices]
+       [callback
+        (lambda (rb event)
+          (let ([selected-action (send rb get-selection)])
+            (callback-function selected-action)))]))
+
+(define (start-stop-callback selected-action)
+  (let ([selected-train (get-selected-train train-id-field2)])
+    (when selected-train
+      (cond
+        [(= selected-action 0)
+         (start-train! (get-selected-train-id train-id-field2))]
+        [(= selected-action 1)
+         (stop-train! (get-selected-train-id train-id-field2))])
+     (update-status-bar status-bar status-bar2 status-bar3 status-bar4 status-bar-pos train-id-field2 (send radio-box2 get-selection) selected-light-id selected-switch-id))))
+
+(define (crossing-callback selected-action)
+  (let* ([status-choice selected-action])
+    (if (= status-choice 0)
+         (open-current-crossing! selected-crossing)
+        (close-current-crossing! selected-crossing))
+     (update-status-bar status-bar status-bar2 status-bar3 status-bar4 status-bar-pos train-id-field2 (send radio-box2 get-selection) selected-light-id selected-switch-id)))
+        
+
+(define radio-box1
+  (create-radio-box group-box-panel "Start/Stop" '("START" "STOP") start-stop-callback))
+
+
+(define button3
+  (create-button "CHANGE DIRECTION" (list train-id-field2) 
+                 (lambda (train-id)
+                   (let ([selected-train (get-selected-train train-id-field2)])
+                     (when selected-train
+                       (change-direction! train-id))
+                    (update-status-bar status-bar status-bar2 status-bar3 status-bar4 status-bar-pos train-id-field2 (send radio-box2 get-selection) selected-light-id selected-switch-id)))
+                 group-box-panel))
+
+
+  (define button-pos
+  (create-button "POSITION TRAIN" (list train-id-field2) 
+                 (lambda (train-id)
+                   (let ([selected-train (get-selected-train train-id-field2)])
+                     
+                       (get-position-train))
+                    
+                    (update-status-bar status-bar status-bar2 status-bar3 status-bar4 status-bar-pos train-id-field2 (send radio-box2 get-selection) selected-light-id selected-switch-id))
+                 group-box-panel))
+
+
+(define train-id-field-traject (new text-field% [parent group-box-panel] [label "Train ID"]))
+(define loco-begin-field (new text-field% [parent group-box-panel] [label "Begin"]))
+(define loco-dest-field (new text-field% [parent group-box-panel] [label "Destination"]))
+
+  (define button-traject
+  (create-button "TRAJECT BEGIN" (list train-id-field-traject loco-begin-field loco-dest-field)
+                 (lambda (train-id loco-pos1 loco-pos-dest)
+                  (train-on-track train-id loco-pos1 (next-label loco-pos1 #f))
+                  (start-train! train-id)
+                  (start-traject train-id loco-pos-dest)
+                  (update-status-bar status-bar status-bar2 status-bar3 status-bar4 status-bar-pos train-id-field-traject (send radio-box2 get-selection) selected-light-id selected-switch-id))
+                 group-box-panel))
+
+
+(define group-box-panel2 (new group-box-panel%
+                             (parent frame)
+                             (label "CROSSINGS")))
+
+
+  (define (create-choice-box label parent choices callback)
+  (new choice%
+       (label label)
+       (parent parent)
+       (choices choices)
+       [callback
+        (lambda (choice-box event)
+          (callback choice-box event))]))
+
+(define choice-box
+  (create-choice-box "" 
+                     (new horizontal-panel%
+                          (parent group-box-panel2)
+                          (style (list 'border)))
+                     '("C-1" "C-2")
+                     (lambda (choice-box event)
+                       (let* ([selected-index (send choice-box get-selection)]
+                              [crossing-id (list-ref list-of-crossings selected-index)])
+                         (store-crossing! crossing-id))
+                     )))
+
+
+
+
+  (define radio-box2
+  (create-radio-box group-box-panel2 "" '("Open" "Close") crossing-callback))
+
+
+
+
+
+(define selected-light-id "L-1") ;;initial-light
+
+  (define group-box-panel3 (new group-box-panel%
+                             (parent frame)
+                             (label "LIGHTS")))
+
+
+
+(define light-choice-box
+  (create-choice-box "Select Light:" 
+                     (new horizontal-panel%
+                          (parent group-box-panel3)
+                          (style (list 'border)))
+                     lights
+                     (lambda (choice-box event)
+                       (set! selected-light-id (list-ref lights (send choice-box get-selection)))
+                       )))
+
+(define sign-code-choice-box
+  (create-choice-box "" 
+                     (new horizontal-panel%
+                          (parent group-box-panel3)
+                          (style (list 'border)))
+                     sign-codes
+                     (lambda (choice-box event)
+                       (let* ([selected-code (list-ref sign-codes (send choice-box get-selection))])
+                         (chose-light-color (string->symbol selected-light-id) (string->symbol selected-code)))
+                       (update-status-bar status-bar status-bar2 status-bar3 status-bar4 status-bar-pos train-id-field2 (send radio-box2 get-selection) selected-light-id selected-switch-id))))
+
+  
+
+  (define group-box-panel-switches (new group-box-panel%
+                             (parent frame)
+                             (label "SWITCHES")))
+
+
+  (define selected-switch-id 'S-1)
+  
+
+
+  (define switch-choice-box
+  (create-choice-box "Select Switch:" 
+                     (new horizontal-panel%
+                          (parent group-box-panel-switches)
+                          (style (list 'border)))
+                     switches
+                     (lambda (choice-box event)
+                       (set! selected-switch-id (string->symbol (list-ref switches (send choice-box get-selection))))
+                       
+                       )))
+
+  (define first-time-asking #t)
+
+   (define (create-switch-button label callback boolean)
+     (new button%
+       [parent group-box-panel-switches]
+       [label label]
+       [callback (lambda (button event)
+                   (if boolean
+                   (callback  selected-switch-id)
+                   (begin
+                    (cond (first-time-asking
+                   (new message% [parent group-box-panel-switches] [label (format "Switch ID'S: ~a "  (callback))])
+                   (set! first-time-asking #f))))) ;;you just need to display it one time because the list doesn't change
+                
+                   (update-status-bar status-bar status-bar2 status-bar3 status-bar4 status-bar-pos train-id-field2 (send radio-box2 get-selection) selected-light-id  selected-switch-id))]))
+  ;no fields so new procedure
+
+
+
+  (define button-switch-get (create-switch-button "GET SWITCH POSITION" get-current-switch-position #t)) ;;#t because you just need the position of the switch
+
+  (define button-get-all-switch-ids (create-switch-button "SWITCH IDS" get-all-switches #f))
+  
+  (define switch-pos-field (new text-field% [parent group-box-panel-switches] [label "Switch new position"]))
+
+ (define button-change-switch-id
+  (create-button "CHANGE POSITION SWITCH"
+                 (list switch-pos-field)
+                 (lambda (switch-id-field)
+                   (let* ([new-switch-pos  switch-id-field ])
+                     (set-current-switch-position! selected-switch-id (string->number new-switch-pos))
+                     (update-status-bar status-bar status-bar2 status-bar3 status-bar4 status-bar-pos train-id-field2
+                                        (send radio-box2 get-selection) selected-light-id selected-switch-id)))
+                 group-box-panel-switches))
+
+
+
+  
+
+  (define group-box-panel-status (new group-box-panel%
+                             (parent frame-state)
+                             (label ""))) 
+
+
+   (define status-bar (new message% [parent group-box-panel-status] [label (format "Train: N/A ~a "  initial-speed)]))
+  
+  (define status-bar2 (new message% [parent group-box-panel-status] [label (format "Crossing: N/A N/A")]))
+
+
+    (define status-bar3 (new message% [parent group-box-panel-status] [label (format "Light: N/A N/A")]))
+
+   (define status-bar4 (new message% [parent group-box-panel-status] [label (format "Switch: N/A N/A")]))
+
+   (define status-bar-pos (new message% [parent group-box-panel-status] [label (format "Position: N/A")]))
+
+
+(send frame show #t) ;;frame for buttons
+  (send frame-state show #t)) ;;frame for state of elements

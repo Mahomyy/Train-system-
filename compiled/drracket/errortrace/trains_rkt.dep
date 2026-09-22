@@ -1,0 +1,1 @@
+("8.11" tarm64osx ("19270ed9b30a35b57ea3036f451f794b63be8687" . "480ed31f2e2ac1948439d043a7f15acdee09dd43") #"/Users/gurkanhamarat/Desktop/PP2/railway.rkt" (collects #"drracket" #"private" #"drracket-errortrace-key.rkt") (collects #"racket" #"class.rkt") (collects #"racket" #"main.rkt") (collects #"racket" #"runtime-config.rkt"))

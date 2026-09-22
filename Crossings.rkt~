@@ -1,0 +1,8 @@
+#lang racket
+
+(provide  list-of-crossings
+         initial-crossing)
+
+(define list-of-crossings (list 'C-1 'C-2))
+
+(define initial-crossing 'C-1)

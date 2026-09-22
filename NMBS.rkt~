@@ -1,0 +1,187 @@
+#lang racket
+;;NMBS
+
+(require "train.rkt")
+(require "Crossings.rkt")
+(require "infrabel.rkt")
+(require "Lights.rkt")
+(require "Switches.rkt")
+(require "graph.rkt")
+
+(provide train-on-track
+         start-train!
+         update-status-bar
+         change-speed!
+         change-direction!
+         get-selected-train-id
+         get-selected-train
+         initial-speed
+         trains
+         direction-train
+         reverse-number
+         stop-train!
+         list-of-crossings
+         close-current-crossing!
+         selected-crossing
+         store-crossing!
+         open-current-crossing!
+         chose-light-color
+         sign-codes
+         lights
+         switches
+         signal
+         get-current-switch-position
+         get-all-switches
+         set-current-switch-position!
+         get-position-train
+         change-test-state)
+
+
+(define (reverse-number nummer)
+  (* -1 nummer))
+
+
+;;Train
+
+(define (train-on-track train-id loco-pos1 loco-pos2)
+  (define train-symbol (string->symbol train-id))
+  (if (hash-has-key? trains train-id)
+      (printf "Train with ID ~a already exists.\n" train-id)
+      (begin
+        (message-to-infrabel-train 'add-loco (list train-symbol (string->symbol loco-pos1) (string->symbol loco-pos2)))
+        (start-train! train-id)
+        (add-train train-id loco-pos1 loco-pos2)
+        (hash-set! trains train-id `(,train-id ,loco-pos1 ,loco-pos2)))))
+
+
+(define (change-speed! train-id speed)
+  (message-to-infrabel-train 'set-loco-speed! (list (string->symbol train-id) speed)))
+
+
+
+(define (change-direction! train-id)
+    (set-train-direction! train-id (if (direction-train train-id) #f #t))
+    (message-to-infrabel-train 'set-loco-speed! (list (string->symbol train-id) (reverse-number (message-to-infrabel-train 'get-loco-speed (list (string->symbol train-id)))))))
+
+
+
+
+(define (start-train! train-id)
+  (let* ([current-direction (direction-train train-id)])
+    (if current-direction
+        (message-to-infrabel-train 'set-loco-speed!(list (string->symbol train-id) (reverse-number initial-speed)))
+        (message-to-infrabel-train 'set-loco-speed! (list (string->symbol train-id)  initial-speed)))))
+
+(define (stop-train! train-id)
+  (message-to-infrabel-train 'set-loco-speed! (list (string->symbol train-id) 0)))
+
+
+(define (get-position-train)
+  (message-to-infrabel-detectionb 'get-occupied-detection-blocks))
+
+(define (is-block-occupied? block-id)
+  (member block-id (message-to-infrabel-detectionb 'get-occupied-detection-blocks)))
+
+
+
+;;crossing
+
+
+(define selected-crossing initial-crossing)
+
+
+(define (close-current-crossing! crossing-id)
+  (message-to-infrabel-crossing 'close-crossing! crossing-id)
+  (change-test-state #f))
+
+(define (open-current-crossing! crossing-id)
+  (message-to-infrabel-crossing 'open-crossing! crossing-id)
+  (change-test-state #t))
+
+(define (store-crossing! crossing-id )
+  (set! selected-crossing crossing-id))
+
+;;lights
+
+(define selected-light #f)
+(define signal #f)
+
+(define (chose-light-color light-id code)
+  (message-to-infrabel-lights 'set-sign-code! (list light-id code))
+  (set! signal code))
+
+
+
+;;display of information on screen
+(define (update-status-bar status-bar status-bar2 status-bar3 status-bar4 status-bar-pos train-id-field selection selected-light-id selected-switch-id)
+  (let* ([selected-train (get-selected-train train-id-field)])
+    (send status-bar 
+          set-label
+          (format " ~a ~a"
+                  (if selected-train 
+                      (get-selected-train-id train-id-field) 
+                      "N/A")
+                  (if selected-train 
+                      (message-to-infrabel-train 'get-loco-speed (string->symbol (get-selected-train-id train-id-field))) 
+                      initial-speed)
+                 ))
+   
+                  
+    (send status-bar2
+          set-label
+          (format " ~a  ~a"
+                  (if selected-crossing 
+                      selected-crossing 
+                      "N/A")
+                  (if selected-crossing 
+                      (if (= selection 0) "Open" "Closed") 
+                      "N/A")))
+    (send status-bar3
+          set-label
+          (format " ~a  ~a"
+                  (if selected-light-id 
+                      selected-light-id 
+                      "N/A")
+                  (if signal 
+                      (symbol->string signal) 
+                      "N/A")))
+    (send status-bar4
+          set-label
+          (format " ~a  ~a"
+                  (if selected-switch-id 
+                      selected-switch-id 
+                      "N/A")
+                 (if selected-switch-id (message-to-infrabel-switches 'get-switch-position selected-switch-id) "N/A")
+                       
+                      ))
+    (send status-bar-pos
+          set-label
+          (format " ~a"
+                  (get-position-train)))
+                  ))
+
+
+;;swicthes
+
+(define (get-current-switch-position switch-id)
+  (message-to-infrabel-switches 'get-switch-position switch-id))
+  
+
+(define (set-current-switch-position! switch-id pos)
+  (message-to-infrabel-switches 'set-switch-position! (list switch-id pos)))
+
+(define (get-all-switches)
+  (message-to-infrabel-switches 'get-switch-ids 'ok))
+
+
+; Retrieving the list of trains
+(define trains-list
+  (for/list ([train-id (hash-keys trains)])
+    (hash-ref trains train-id)))
+
+ ; Gets a trajectory from the graph algos
+    (define (get-trajectory start stop)
+      ; traverse graph from train location to destination
+      (flatten (shortest-path start stop)))
+
+

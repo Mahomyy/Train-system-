@@ -1,0 +1,90 @@
+#lang racket
+
+(require racket/tcp
+         racket/serialize
+         racket/match)
+
+;; Define the functions that will be called based on the received command.
+(define (add-loco train-symbol loco-pos1 loco-pos2)
+  ;; Implementation here
+  (printf "Adding loco: ~a, ~a, ~a\n" train-symbol loco-pos1 loco-pos2)
+  'ok)
+
+(define (set-loco-speed! train-symbol speed)
+  ;; Implementation here
+  (printf "Setting loco speed: ~a, ~a\n" train-symbol speed)
+  'ok)
+
+(define (get-loco-speed train-symbol)
+  ;; Implementation here
+  (printf "Getting loco speed: ~a\n" train-symbol)
+  100) ;; Dummy speed
+
+(define (close-crossing! crossing-id)
+  ;; Implementation here
+  (printf "Closing crossing: ~a\n" crossing-id)
+  'ok)
+
+(define (open-crossing! crossing-id)
+  ;; Implementation here
+  (printf "Opening crossing: ~a\n" crossing-id)
+  'ok)
+
+(define (set-sign-code! light-id code)
+  ;; Implementation here
+  (printf "Setting sign code: ~a, ~a\n" light-id code)
+  'ok)
+
+(define (get-switch-position switch-id)
+  ;; Implementation here
+  (printf "Getting switch position: ~a\n" switch-id)
+  'straight)
+
+(define (set-switch-position! switch-id pos)
+  ;; Implementation here
+  (printf "Setting switch position: ~a, ~a\n" switch-id pos)
+  'ok)
+
+(define (get-switch-ids _)
+  ;; Implementation here
+  (printf "Getting all switch IDs\n")
+  '(switch1 switch2 switch3))
+
+(define (get-occupied-detection-blocks _)
+  ;; Implementation here
+  (printf "Getting occupied detection blocks\n")
+  '(block1 block2))
+
+;; Function to handle client requests
+(define (handle-client in out)
+  (with-handlers ([exn:fail? (lambda (exn) (printf "Error handling client: ~a\n" exn))])
+    (let loop ()
+      (define request (deserialize in))
+      (define response
+        (match request
+          [(cons 'add-loco args) (apply add-loco args)]
+          [(cons 'set-loco-speed! args) (apply set-loco-speed! args)]
+          [(cons 'get-loco-speed args) (apply get-loco-speed args)]
+          [(cons 'close-crossing! args) (apply close-crossing! args)]
+          [(cons 'open-crossing! args) (apply open-crossing! args)]
+          [(cons 'set-sign-code! args) (apply set-sign-code! args)]
+          [(cons 'get-switch-position args) (apply get-switch-position args)]
+          [(cons 'set-switch-position! args) (apply set-switch-position! args)]
+          [(cons 'get-switch-ids args) (apply get-switch-ids args)]
+          [(cons 'get-occupied-detection-blocks args) (apply get-occupied-detection-blocks args)]
+          [_ 'unknown-command]))
+      (serialize response out)
+      (flush-output out)
+      (loop))))
+
+;; Function to start the server
+(define (start-server port)
+  (define listener (tcp-listen port))
+  (printf "Infrabel Server listening on port ~a\n" port)
+  (let loop ()
+    (define-values (in out) (tcp-accept listener))
+    (thread (lambda () (handle-client in out)))
+    (loop)))
+
+;; Start the server on port 4000
+(start-server 4000)

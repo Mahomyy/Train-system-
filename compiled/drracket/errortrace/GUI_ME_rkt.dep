@@ -1,0 +1,1 @@
+("8.11" tarm64osx ("89c560ed3e4448123946ffa198128cb41e39de39" . "27f634ec0f8536eb11e3e9c5a9d0bd3633c79ce8") #"/Users/gurkanhamarat/Desktop/PP2 folder/NMBS.rkt" (collects #"drracket" #"private" #"drracket-errortrace-key.rkt") (collects #"racket" #"gui" #"base.rkt") (collects #"racket" #"main.rkt") (collects #"racket" #"runtime-config.rkt"))

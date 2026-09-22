@@ -1,0 +1,12 @@
+#lang racket
+
+
+(provide sign-codes
+         lights
+         )
+
+
+ (define sign-codes
+  (list "Hp1" "Hp0" "Hp0+Sh0" "Ks1+Zs3" "Ks2" "Ks2+Zs3" "Sh1" "Ks1+Zs3+Zs3v"))
+
+(define lights (list "L-1" "L-2")); Add the possible light IDs
